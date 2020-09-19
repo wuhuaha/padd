@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 
 import json
+from pathlib import Path
 
 
 def load_label_map(map_dir="./data/label_map.json"):
@@ -10,6 +11,19 @@ def load_label_map(map_dir="./data/label_map.json"):
     """
     return json.load(open(map_dir, "r"))
 
+def json_to_text(file_path,data):
+    '''
+    将json list写入text文件中
+    :param file_path:
+    :param data:
+    :return:
+    '''
+    if not isinstance(file_path, Path):
+        file_path = Path(file_path)
+    with open(str(file_path), 'w') as fw:
+        for line in data:
+            line = json.dumps(line, ensure_ascii=False)
+            fw.write(line + '\n')
 
 def cal_chunk(pred_label, refer_label):
     tp = dict()
@@ -92,6 +106,7 @@ def res_evaluate(res_dir="./outputs/predict/predictions.json", data_dir="./data/
     print(num_map)
 
     total_label = []
+    total_text = []
     with open(data_dir, "r") as file:
         first_flag = True
         for line in file:
@@ -105,11 +120,14 @@ def res_evaluate(res_dir="./outputs/predict/predictions.json", data_dir="./data/
             if len(line) < 2:
                 continue
             labels = line[1].split("\x02")
+            text = line[0].split("\x02")
             total_label.append(labels)
+            total_text.append(text)
     total_label = [[label_map[j] for j in i] for i in total_label]
-    #print(total_label)
+    print(total_text[0])
   
     total_res = []
+    total_label_entity = []
     with open(res_dir, "r") as file:
         cnt = 0
         for line in file:
@@ -121,6 +139,7 @@ def res_evaluate(res_dir="./outputs/predict/predictions.json", data_dir="./data/
 
                 if len(total_label[cnt]) < len(res_arr):
                     total_res.append(res_arr[1: 1 + len(total_label[cnt])])
+                    res_arr = res_arr[1: 1 + len(total_label[cnt])]
                 elif len(total_label[cnt]) == len(res_arr):
                     total_res.append(res_arr)
                 else:
@@ -129,11 +148,12 @@ def res_evaluate(res_dir="./outputs/predict/predictions.json", data_dir="./data/
             except:
                 print("json format error: {}".format(cnt))
                 print(line)
+            label_entity = get_entity_bios(res_arr,id2label)
+            total_label_entity.append(label_entity)
 
             cnt += 1
     total_res_label = [[num_map[j] for j in i] for i in total_res]
-    labels = get_entity_bios(total_res[0],id2label)
-    print(labels)
+    print(total_label_entity[0])
 
     total_res_equal = []
     total_label_equal = []
@@ -147,7 +167,32 @@ def res_evaluate(res_dir="./outputs/predict/predictions.json", data_dir="./data/
     f1 = cal_chunk(total_res_equal, total_label_equal)
     print('data num: {}'.format(len(total_label)))
     print("f1: {:.4f}".format(f1))
-    print(total_label[16])
-    print(total_res[16])
+    print(total_label[0])
+    print(total_res[0])
+   
+    test_submit = [] 
+    output_submit_file = './outputs/trigger_result.json'
+    for x, y in zip(total_text, total_label_entity):
+        json_d = {}
+        json_d['text'] = ''.join(x) 
+        json_d['label'] = {}
+        entities = y
+        words = x
+        if len(entities) != 0:
+            for subject in entities:
+                tag = subject[0]
+                start = subject[1]
+                end = subject[2]
+                word = "".join(words[start:end + 1])
+                if tag in json_d['label']:
+                    if word in json_d['label'][tag]:
+                        json_d['label'][tag][word].append([start, end])
+                    else:
+                        json_d['label'][tag][word] = [[start, end]]
+                else:
+                    json_d['label'][tag] = {}
+                    json_d['label'][tag][word] = [[start, end]]
+        test_submit.append(json_d)
+    json_to_text(output_submit_file,test_submit)
 
 res_evaluate()
