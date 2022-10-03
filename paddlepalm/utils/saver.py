@@ -57,7 +57,26 @@ def init_pretraining_params(exe,
         assert os.path.exists(os.path.join(pretraining_params_path, '__palmmodel__')), "__palmmodel__ not found."
 
         with tarfile.open(os.path.join(pretraining_params_path, '__palmmodel__'), 'r') as f:
-            f.extractall(os.path.join(pretraining_params_path, '.temp'))
+            def is_within_directory(directory, target):
+                
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+            
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                
+                return prefix == abs_directory
+            
+            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+            
+                for member in tar.getmembers():
+                    member_path = os.path.join(path, member.name)
+                    if not is_within_directory(path, member_path):
+                        raise Exception("Attempted Path Traversal in Tar File")
+            
+                tar.extractall(path, members, numeric_owner) 
+                
+            
+            safe_extract(f, os.path.join(pretraining_params_path,".temp"))
         
         log_path = os.path.join(pretraining_params_path, '__palmmodel__')
         pretraining_params_path = os.path.join(pretraining_params_path, '.temp')
